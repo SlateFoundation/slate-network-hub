@@ -1,6 +1,6 @@
 <?php
 
-namespace Slate\Network;
+namespace Slate\NetworkHub;
 
 use ActiveRecord;
 
