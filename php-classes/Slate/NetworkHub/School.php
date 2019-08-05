@@ -19,6 +19,14 @@ class School extends ActiveRecord
 
     public function getNetworkUsers()
     {
+        if (!$this->Domain) {
+            throw new \Exception('Domain must be configured to retrieve network users.');
+        }
+
+        if (!$this->APIKey) {
+            throw new \Exception('APIKey must be configured to retrieve network users.');
+        }
+
         $queryParameters = http_build_query([
             'apiKey' => $this->APIKey,
             'limit' => 0,
