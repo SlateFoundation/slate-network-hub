@@ -5,7 +5,7 @@ namespace Slate\NetworkHub;
 use Site;
 
 use Emergence\Connectors\AbstractConnector;
-use Emergence\Connectors\Job;
+use Emergence\Connectors\IJob;
 use Emergence\Connectors\ISynchronize;
 use Emergence\Connectors\Exceptions\SyncException;
 
@@ -79,7 +79,7 @@ class Connector extends AbstractConnector implements ISynchronize
         return static::respond('network-login');
     }
 
-    public static function synchronize(Job $Job, $pretend = true)
+    public static function synchronize(IJob $Job, $pretend = true)
     {
         $results = [
             'created' => [
@@ -145,7 +145,7 @@ class Connector extends AbstractConnector implements ISynchronize
         }
     }
 
-    protected static function syncNetworkUser(Job $Job, School $NetworkSchool, array $networkUser)
+    protected static function syncNetworkUser(IJob $Job, School $NetworkSchool, array $networkUser)
     {
         if (empty($networkUser['PrimaryEmail']['Data'])) {
             return new SyncResult(
