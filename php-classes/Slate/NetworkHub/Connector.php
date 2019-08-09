@@ -1,6 +1,6 @@
 <?php
 
-namespace Slate\Connectors\NetworkHub;
+namespace Slate\NetworkHub;
 
 use Site;
 
@@ -11,7 +11,6 @@ use Emergence\Connectors\Exceptions\SyncException;
 
 use Firebase\JWT\JWT;
 
-use Slate\NetworkHub\School;
 use Slate\NetworkHub\User as NetworkUser;
 
 class Connector extends AbstractConnector implements ISynchronize
