@@ -16,7 +16,7 @@ use Slate\NetworkHub\User as NetworkUser;
 class Connector extends AbstractConnector implements ISynchronize
 {
     public static $title = 'Slate Network Hub';
-    public static $connectorId = 'slate-network-hub';
+    public static $connectorId = 'network-hub';
 
     public static function handleRequest($action = null)
     {
