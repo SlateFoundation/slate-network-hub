@@ -50,7 +50,6 @@ class School extends ActiveRecord
                 'exceptionMessage' => $results,
                 'exceptionCode' => $httpStatus
             ]);
-
             return false;
         }
     }

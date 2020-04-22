@@ -8,6 +8,7 @@ use Emergence\Connectors\AbstractConnector;
 use Emergence\Connectors\IJob;
 use Emergence\Connectors\ISynchronize;
 use Emergence\Connectors\Exceptions\SyncException;
+use Emergence\Connectors\SyncResult;
 
 use Firebase\JWT\JWT;
 
@@ -43,7 +44,7 @@ class Connector extends AbstractConnector implements ISynchronize
                 $token = JWT::decode($_REQUEST['JWT'], $NetworkSchool->APIKey, ['HS256']);
                 \MICS::dump($token, 'decoded token');
             } catch (\Exception $e) {
-#                Logger::error();
+                // Logger::error();
                 return static::throwInvalidRequestError('Unable to decode JWT Token. Please contact an administrator for support.');
             }
 
@@ -100,7 +101,8 @@ class Connector extends AbstractConnector implements ISynchronize
 
         foreach ($NetworkHubSchools as $NetworkHubSchool) {
             try {
-                $syncResults = static::pullNetworkUsers($NetworkHubSchool, $pretend);
+                $syncResults = static::pullNetworkUsers($Job, $NetworkHubSchool, $pretend);
+                // \MICS::dump($syncResults, 'sync results', true);
                 $results['created'][$NetworkHubSchool->Domain] = $syncResults['created'];
                 $results['created']['total'] += $syncResults['created'];
             } catch (SyncException $e) {
@@ -111,7 +113,7 @@ class Connector extends AbstractConnector implements ISynchronize
         return $results;
     }
 
-    public static function pullNetworkUsers(School $NetworkSchool, $pretend = true)
+    public static function pullNetworkUsers(IJob $Job, School $NetworkSchool, $pretend = true)
     {
         $results = [
             'created' => 0,
@@ -122,6 +124,7 @@ class Connector extends AbstractConnector implements ISynchronize
         ];
         try {
             $networkUsers = $NetworkSchool->getNetworkUsers();
+            // \MICS::dump($networkUsers, 'network users');
             foreach ($networkUsers as $networkUser) {
                 try {
                     $syncResults = static::syncNetworkUser($Job, $NetworkSchool, $networkUser);
@@ -137,12 +140,14 @@ class Connector extends AbstractConnector implements ISynchronize
                         $results['skipped']++;
                     }
                 } catch (SyncException $s) {
-                    $Job->logException($e);
+                    $Job->logException($s);
                 }
             }
         } catch (\Exception $e) {
             return new SyncException($e->getMessage(), []);
         }
+
+        return $results;
     }
 
     protected static function syncNetworkUser(IJob $Job, School $NetworkSchool, array $networkUser)
