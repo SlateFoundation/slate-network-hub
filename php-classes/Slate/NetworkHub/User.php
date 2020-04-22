@@ -6,25 +6,27 @@ use ActiveRecord;
 
 use Emergence\Connectors\Mapping;
 
-class User extends ActiveRecord
+class User extends \Emergence\People\User
 {
-    public static $tableName = 'slate_network_users';
-
     public static $fields = [
-        'Email',
-        'FirstName',
-        'LastName',
-        'SchoolID' => 'uint'
+        'SchoolID' => 'uint',
+        'SchoolUsername'
     ];
 
     public static $relationships = [
         'School' => [
             'class' => School::class,
             'type' => 'one-one'
-        ],
-        'Mapping' => [
-            'type' => 'context-children',
-            'class' => Mapping::class
+        ]
+    ];
+
+    public static $validators = [
+        'Username' => null,
+        'School' => 'require-relationship',
+        'SchoolUsername' => [
+            'validator' => 'handle',
+            'required' => true,
+            'errorMessage' => 'SchoolUsername can only contain letters, numbers, hyphens, and underscores.'
         ]
     ];
 }

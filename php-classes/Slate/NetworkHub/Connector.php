@@ -9,8 +9,13 @@ use Emergence\Connectors\IJob;
 use Emergence\Connectors\ISynchronize;
 use Emergence\Connectors\Exceptions\SyncException;
 use Emergence\Connectors\SyncResult;
+use Emergence\KeyedDiff;
+use Emergence\People\ContactPoint\Email;
+use Emergence\Util\Data as DataUtil;
 
 use Firebase\JWT\JWT;
+
+use Psr\Log\LoggerInterface;
 
 use Slate\NetworkHub\User as NetworkUser;
 
@@ -102,15 +107,29 @@ class Connector extends AbstractConnector implements ISynchronize
         foreach ($NetworkHubSchools as $NetworkHubSchool) {
             try {
                 $syncResults = static::pullNetworkUsers($Job, $NetworkHubSchool, $pretend);
-                // \MICS::dump($syncResults, 'sync results', true);
+
                 $results['created'][$NetworkHubSchool->Domain] = $syncResults['created'];
                 $results['created']['total'] += $syncResults['created'];
+
+                $results['skipped'][$NetworkHubSchool->Domain] = $syncResults['skipped'];
+                $results['skipped']['total'] += $syncResults['skipped'];
+
+                $results['updated'][$NetworkHubSchool->Domain] = $syncResults['updated'];
+                $results['updated']['total'] += $syncResults['updated'];
             } catch (SyncException $e) {
                 $Job->logException($e);
             }
         }
 
-        return $results;
+        // save job results
+        $Job->Status = 'Completed';
+        $Job->Results = $results;
+
+        if (!$pretend) {
+            $Job->save();
+        }
+
+        return true;
     }
 
     public static function pullNetworkUsers(IJob $Job, School $NetworkSchool, $pretend = true)
@@ -124,10 +143,9 @@ class Connector extends AbstractConnector implements ISynchronize
         ];
         try {
             $networkUsers = $NetworkSchool->getNetworkUsers();
-            // \MICS::dump($networkUsers, 'network users');
             foreach ($networkUsers as $networkUser) {
                 try {
-                    $syncResults = static::syncNetworkUser($Job, $NetworkSchool, $networkUser);
+                    $syncResults = static::syncNetworkUser($NetworkSchool, $networkUser, $Job, $pretend);
 
                     if ($syncResults->getStatus() === SyncResult::STATUS_CREATED) {
                         $results['created']++;
@@ -143,67 +161,164 @@ class Connector extends AbstractConnector implements ISynchronize
                     $Job->logException($s);
                 }
             }
-        } catch (\Exception $e) {
-            return new SyncException($e->getMessage(), []);
+        } catch (Exception $e) {
+            throw new SyncException($e->getMessage(), []);
         }
 
         return $results;
     }
 
-    protected static function syncNetworkUser(IJob $Job, School $NetworkSchool, array $networkUser)
+    public static function syncNetworkUser(School $NetworkSchool, array $networkUserRecord, LoggerInterface $logger = null, $pretend = true)
     {
-        if (empty($networkUser['PrimaryEmail']['Data'])) {
+        $logger = static::getLogger($logger);
+
+        if (empty($networkUserRecord['PrimaryEmail']['Data'])) {
             return new SyncResult(
                 SyncResult::STATUS_SKIPPED,
                 'Skipped {slateUsername} @ {slateDomain} due to missing PrimaryEmail',
                 [
-                    'slateUsername' => $networkUser['Username'],
+                    'slateUsername' => $networkUserRecord['Username'],
                     'slateDomain' => $NetworkSchool->Domain
                 ]
             );
         }
 
-        if (!$NetworkUserRecord = NetworkUser::getByField('Email', $networkUser['PrimaryEmail']['Data'])) {
-                $NetworkUserRecord = NetworkUser::create([
-                    'Email' => $networkUser['PrimaryEmail']['Data'],
-                    'FirstName' => $networkUser['FirstName'],
-                    'LastName' => $networkUser['LastName'],
-                    'SchoolID' => $NetworkSchool->ID
-                ], true);
-                return new SyncResult(
-                    SyncResult::STATUS_CREATED,
-                    'Created new network user for {slateUsername} @ {slateDomain}',
+        $networkUserConditions = [
+            'SchoolID' => $NetworkSchool->ID,
+            'SchoolUsername' => $networkUserRecord['Username']
+        ];
+
+        // create a new network user if it does not exist
+        if (!$NetworkUser = NetworkUser::getByWhere($networkUserConditions)) {
+            $NetworkUser = NetworkUser::create([
+                'FirstName' => $networkUserRecord['FirstName'],
+                'LastName' => $networkUserRecord['LastName'],
+                'SchoolUsername' => $networkUserRecord['Username'],
+                'SchoolID' => $NetworkSchool->ID
+            ]);
+
+            $NetworkUser->PrimaryEmail = $NetworkUserPrimaryEmail = Email::fromString(
+                $networkUserRecord['PrimaryEmail']['Data'],
+                $NetworkUser
+            );
+
+            if (!$NetworkUser->validate(true)) {
+                $logger->error(
+                    'Unable to create network user -- invalid record {validationErrors}',
                     [
-                        'slateUsername' => $NetworkUserRecord->Email,
-                        'slateDomain' => $NetworkSchool->Domain
+                        'networkUserRecord' => $networkUserRecord,
+                        'validationErrors' => $NetworkUser->getValidationErrors()
                     ]
                 );
-            } elseif (
-                $NetworkUserRecord->FirstName != $networkUser['FirstName'] ||
-                $NetworkUserRecord->LastName != $networkUser['LastName']
-            ) {
-                $NetworkUserRecord->setFields([
-                    'FirstName' => $networkUser['FirstName'],
-                    'LastName' => $networkUser['LastName']
-                ]);
-                $NetworkUserRecord->save();
+
                 return new SyncResult(
-                    SyncResult::STATUS_UPDATED,
-                    'Updated network user {slateUsername} @ {slateDomain}',
+                    SyncResult::STATUS_SKIPPED,
+                    'Invalid Record: Unable to sync network user, skipping.',
                     [
-                        'slateUsername' => $NetworkUserRecord->Email,
-                        'slateDomain' => $NetworkSchool->Domain
+                        'slateUsername' => $networkUserRecord['Username'],
+                        'slateDomain' => $NetworkSchool->Domain,
+                        'validationErrors' => $NetworkUser->getValidationErrors()
                     ]
                 );
             }
 
-            return new SyncResult(
-                SyncResult::STATUS_VERIFIED,
-                'Network user {slateUsername} @ {slateDomain} found and verified',
+            if (!$pretend) {
+                $NetworkUser->save(true);
+            }
+
+            $logger->notice(
+                'Created network user for {slatePrimaryEmail}',
                 [
-                    'slateUsername' => $NetworkUserRecord->Email,
+                    'slatePrimaryEmail' => $NetworkUserPrimaryEmail->Data
+                ]
+            );
+
+            return new SyncResult(
+                SyncResult::STATUS_CREATED,
+                'Created new network user for {FirstName} {LastName} ({slatePrimaryEmail} @ {slateDomain})',
+                [
+                    'FirstName' => $NetworkUser->FirstName,
+                    'LastName' => $NetworkUser->LastName,
+                    'Username' => $NetworkUser->Username,
+                    'slatePrimaryEmail' => $NetworkUserPrimaryEmail->Data,
                     'slateDomain' => $NetworkSchool->Domain
                 ]
             );
+
+        } else {
+            $userChanges = new KeyedDiff();
+            $emailChanges = new KeyedDiff();
+
+            if ($NetworkUser->FirstName != $networkUserRecord['FirstName']) {
+                $userChanges->addChange('FirstName', $networkUserRecord['FirstName'], $NetworkUser->FirstName);
+            }
+
+            if ($NetworkUser->LastName != $networkUserRecord['LastName']) {
+                $userChanges->addChange('LastName', $networkUserRecord['LastName'], $NetworkUser->LastName);
+            }
+
+            if ($NetworkUser->PrimaryEmail->toString() != $networkUserRecord['PrimaryEmail']['Data']) {
+                $emailChanges->addChange('Data', $networkUserRecord['PrimaryEmail']['Data'], $NetworkUser->PrimaryEmail->toString());
+            } elseif ($NetworkUser->ID === 642) {
+                \MICS::dump([
+                    $NetworkUser->PrimaryEmail,
+                    $networkUserRecord['PrimaryEmail']
+                ], 'user email', true);
+            }
+
+            if (
+                $userChanges->hasChanges() ||
+                $emailChanges->hasChanges()
+            ) {
+
+                if ($userChanges->hasChanges()) {
+                    $NetworkUser->setFields($userChanges->getNewValues());
+                    $logger->debug(
+                        'Updating Network User {schoolUsername} @ {schoolDomain}',
+                        [
+                            'schoolUsername' => $NetworkUser->SchoolUsername,
+                            'schoolDomain' => $NetworkUser->School->Domain,
+                            'changes' => $userChanges
+                        ]
+                    );
+                }
+
+                if ($emailChanges->hasChanges()) {
+                    $NetworkUser->PrimaryEmail->setFields($emailChanges->getNewValues());
+
+                    $logger->debug(
+                        'Updating Network User {schoolUsername} @ {schoolDomain} primary email: {slatePrimaryEmail}',
+                        [
+                            'schoolUsername' => $NetworkUser->SchoolUsername,
+                            'schoolDomain' => $NetworkUser->School->Domain,
+                            'slatePrimaryEmail' => $NetworkUser->PrimaryEmail->toString(),
+                            'changes' => $emailChanges
+                        ]
+                    );
+                }
+
+                if (!$pretend) {
+                    $NetworkUser->save(true);
+                }
+
+                return new SyncResult(
+                    SyncResult::STATUS_UPDATED,
+                    'Updated network user {slatePrimaryEmail} @ {slateDomain}',
+                    [
+                        'slatePrimaryEmail' => $NetworkUser->PrimaryEmail->toString(),
+                        'slateDomain' => $NetworkSchool->Domain
+                    ]
+                );
+            }
+        }
+
+        return new SyncResult(
+            SyncResult::STATUS_VERIFIED,
+            'Network user {slatePrimaryEmail} @ {slateDomain} found and verified',
+            [
+                'slatePrimaryEmail' => $NetworkUser->PrimaryEmail->toString(),
+                'slateDomain' => $NetworkSchool->Domain
+            ]
+        );
     }
 }
