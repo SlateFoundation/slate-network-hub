@@ -14,7 +14,8 @@ class School extends ActiveRecord
 
     public static $fields = [
         'Domain',
-        'APIKey'
+        'APIKey',
+        'Handle'
     ];
 
     public function getNetworkUsers()

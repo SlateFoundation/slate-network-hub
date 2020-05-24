@@ -193,6 +193,9 @@ class Connector extends AbstractConnector implements ISynchronize
             $NetworkUser = NetworkUser::create([
                 'FirstName' => $networkUserRecord['FirstName'],
                 'LastName' => $networkUserRecord['LastName'],
+                'UserClass' => $networkUserRecord['Class'],
+                'AccountLevel' => $networkUserRecord['AccountLevel'],
+                'StudentNumber' => $networkUserRecord['StudentNumber'],
                 'SchoolUsername' => $networkUserRecord['Username'],
                 'SchoolID' => $NetworkSchool->ID
             ]);

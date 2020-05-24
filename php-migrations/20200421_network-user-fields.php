@@ -9,7 +9,8 @@ $tableName = User::$tableName;
 $historyTableName = User::getHistoryTable();
 $columnNames = [
     'SchoolID',
-    'SchoolUsername'
+    'SchoolUsername',
+    'UserClass'
 ];
 
 if (!static::tableExists($tableName)) {

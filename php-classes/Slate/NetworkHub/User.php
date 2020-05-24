@@ -10,7 +10,8 @@ class User extends \Emergence\People\User
 {
     public static $fields = [
         'SchoolID' => 'uint',
-        'SchoolUsername'
+        'SchoolUsername',
+        'UserClass'
     ];
 
     public static $relationships = [
@@ -22,6 +23,7 @@ class User extends \Emergence\People\User
 
     public static $validators = [
         'Username' => null,
+        'StudentNumber' => null,
         'School' => 'require-relationship',
         'SchoolUsername' => [
             'validator' => 'handle',
