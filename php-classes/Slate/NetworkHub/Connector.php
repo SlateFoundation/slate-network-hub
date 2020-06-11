@@ -29,25 +29,30 @@ class Connector extends AbstractConnector implements ISynchronize
         switch ($action ? $action : $action = static::shiftPath()) {
             case 'login':
                 return static::handleNetworkLoginRequest();
+
             default:
-                return parent::handleRequest($action);
+                return static::handleRequest($action);
         }
     }
 
-    public static function handleNetworkLoginRequest()
+    public static function handleNetworkLoginRequest($returnUrl = false)
     {
         if (!empty($_COOKIE['JWT'])) {
             // TODO: route user to original returnURL
         }
         // verify & decode JWT token from school request {username, domain}
         if (!empty($_REQUEST['JWT']) && !empty($_REQUEST['domain'])) {
-            if (!$NetworkSchool = School::getByField('Domain', $_REQUEST['domain'])) {
-                return static::throwInvalidRequestError('Unable to complete request. Please contact an administrator for support.');
+            if (!$NetworkSchool = School::getByWhere([
+                'Domain' => [
+                    'operator' => 'LIKE',
+                    'value' => sprintf('%%%s', $_REQUEST['domain'])
+                ]
+            ])) {
+                return static::throwInvalidRequestError('Domain not found: Unable to complete request. Please contact an administrator for support.');
             }
 
             try {
                 $token = JWT::decode($_REQUEST['JWT'], $NetworkSchool->APIKey, ['HS256']);
-                \MICS::dump($token, 'decoded token');
             } catch (\Exception $e) {
                 // Logger::error();
                 return static::throwInvalidRequestError('Unable to decode JWT Token. Please contact an administrator for support.');
@@ -60,29 +65,38 @@ class Connector extends AbstractConnector implements ISynchronize
         // find user school from input
         if (!empty($_REQUEST['email'])) {
             // try to redirect user network school's login
-            $NetworkUser = NetworkUser::getByWhere([
-                'Email' => $_REQUEST['email']
+            $EmailContactPoint = Email::getByWhere([
+                'Data' => $_REQUEST['email']
             ]);
-
-            if (!$NetworkUser) {
+            $NetworkUser = NetworkUser::getByID($EmailContactPoint->PersonID);
+            if (
+                !$EmailContactPoint ||
+                !$NetworkUser ||
+                !$NetworkUser->School
+            ) {
                 return static::throwInvalidRequestError('Unable to find the user within the network. Please contact an admininstrator for support.');
             }
 
             $token = JWT::encode([
-                'username' => $NetworkUser->Email,
-                'domain' => Site::getConfig('primary_hostname'),
-                'returnUrl' => '/connectors/slate-network-hub/login'
+                'username' => $EmailContactPoint->toString(), //$NetworkUser->PrimaryEmail->toString(),
+                'domain' => 'http://vm.nafis.me:88',
+                'returnUrl' => '/connectors/network-hub/login'
             ], $NetworkUser->School->APIKey);
 
             $queryParameters = http_build_query([
                 'JWT' => $token
             ]);
 
-            $networkSiteLoginUrl = 'http://'.$NetworkUser->School->Domain.'/network-api/login?'.$queryParameters;
-            header("Location:{$networkSiteLoginUrl}");
+            $networkSiteLoginUrl = 'http://' . $NetworkUser->School->Domain.'/network-api/login?'.$queryParameters;
+
+            header('Location: '.$networkSiteLoginUrl);
         }
         // show network login screen
-        return static::respond('network-login');
+        return static::respond('network-login', [
+            '_LOGIN' => [
+                'return' => $returnUrl
+            ]
+        ]);
     }
 
     public static function synchronize(IJob $Job, $pretend = true)
@@ -262,11 +276,6 @@ class Connector extends AbstractConnector implements ISynchronize
 
             if ($NetworkUser->PrimaryEmail->toString() != $networkUserRecord['PrimaryEmail']['Data']) {
                 $emailChanges->addChange('Data', $networkUserRecord['PrimaryEmail']['Data'], $NetworkUser->PrimaryEmail->toString());
-            } elseif ($NetworkUser->ID === 642) {
-                \MICS::dump([
-                    $NetworkUser->PrimaryEmail,
-                    $networkUserRecord['PrimaryEmail']
-                ], 'user email', true);
             }
 
             if (

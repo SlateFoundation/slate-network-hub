@@ -6,7 +6,7 @@ use DB;
 use SQL;
 
 $tableName = User::$tableName;
-$historyTableName = User::getHistoryTable();
+$historyTableName = User::getHistoryTableName();
 $columnNames = [
     'SchoolID',
     'SchoolUsername',
