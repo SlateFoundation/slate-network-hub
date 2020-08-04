@@ -37,38 +37,21 @@ class Connector extends AbstractConnector implements ISynchronize
 
     public static function handleNetworkLoginRequest($returnUrl = false)
     {
-        if (!empty($_COOKIE['JWT'])) {
-            // TODO: route user to original returnURL
-        }
-        // verify & decode JWT token from school request {username, domain}
-        if (!empty($_REQUEST['JWT']) && !empty($_REQUEST['domain'])) {
-            if (!$NetworkSchool = School::getByWhere([
-                'Domain' => [
-                    'operator' => 'LIKE',
-                    'value' => sprintf('%%%s', $_REQUEST['domain'])
-                ]
-            ])) {
-                return static::throwInvalidRequestError('Domain not found: Unable to complete request. Please contact an administrator for support.');
-            }
 
-            try {
-                $token = JWT::decode($_REQUEST['JWT'], $NetworkSchool->APIKey, ['HS256']);
-            } catch (\Exception $e) {
-                // Logger::error();
-                return static::throwInvalidRequestError('Unable to decode JWT Token. Please contact an administrator for support.');
-            }
-
-
-            // store cookie/session and proceed to original returnURL
+        // redirect to original route
+        if ($jwtPayload = $_SESSION['hub_token_payload'] && $_SESSION['network_login_return']) {
+            Site::redirect($_SESSION['network_login_return']);
         }
 
-        // find user school from input
+        // redirect to school login
         if (!empty($_REQUEST['email'])) {
             // try to redirect user network school's login
             $EmailContactPoint = Email::getByWhere([
                 'Data' => $_REQUEST['email']
             ]);
+
             $NetworkUser = NetworkUser::getByID($EmailContactPoint->PersonID);
+
             if (
                 !$EmailContactPoint ||
                 !$NetworkUser ||
@@ -77,20 +60,18 @@ class Connector extends AbstractConnector implements ISynchronize
                 return static::throwInvalidRequestError('Unable to find the user within the network. Please contact an admininstrator for support.');
             }
 
-            $token = JWT::encode([
-                'username' => $EmailContactPoint->toString(), //$NetworkUser->PrimaryEmail->toString(),
-                'domain' => 'http://vm.nafis.me:88',
-                'returnUrl' => '/connectors/network-hub/login'
-            ], $NetworkUser->School->APIKey);
-
+            $hostname = 'vm.nafis.me:88'; // Site::getConfig('primary_hostname');
             $queryParameters = http_build_query([
-                'JWT' => $token
+                'username' => $EmailContactPoint->toString(),
+                // TODO: replace with generated URL
+                'redirectUrl' => 'http://' . $hostname . $_REQUEST['_LOGIN']['return']
             ]);
 
             $networkSiteLoginUrl = 'http://' . $NetworkUser->School->Domain.'/network-api/login?'.$queryParameters;
 
             header('Location: '.$networkSiteLoginUrl);
         }
+
         // show network login screen
         return static::respond('connectors/network-hub/network-login', [
             '_LOGIN' => [
