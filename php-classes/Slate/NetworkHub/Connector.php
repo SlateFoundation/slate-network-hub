@@ -92,7 +92,7 @@ class Connector extends AbstractConnector implements ISynchronize
             header('Location: '.$networkSiteLoginUrl);
         }
         // show network login screen
-        return static::respond('network-login', [
+        return static::respond('connectors/network-hub/network-login', [
             '_LOGIN' => [
                 'return' => $returnUrl
             ]
