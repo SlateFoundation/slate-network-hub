@@ -106,11 +106,14 @@ class Connector extends AbstractConnector implements ISynchronize
                 $results['created'][$NetworkHubSchool->Domain] = $syncResults['created'];
                 $results['created']['total'] += $syncResults['created'];
 
-                $results['skipped'][$NetworkHubSchool->Domain] = $syncResults['skipped'];
+                $results['skipped'][$NetworkHubSchool->Domain] = $syncResults['skippedUsers'];
                 $results['skipped']['total'] += $syncResults['skipped'];
 
                 $results['updated'][$NetworkHubSchool->Domain] = $syncResults['updated'];
                 $results['updated']['total'] += $syncResults['updated'];
+
+                $results['verified'][$NetworkHubSchool->Domain] = $syncResults['verified'];
+                $results['verified']['total'] += $syncResults['verified'];
             } catch (SyncException $e) {
                 $Job->logException($e);
             }
@@ -149,7 +152,7 @@ class Connector extends AbstractConnector implements ISynchronize
                     } elseif ($syncResults->getStatus() === SyncResult::STATUS_VERIFIED) {
                         $results['verified']++;
                     } elseif ($syncResults->getStatus() === SyncResult::STATUS_SKIPPED) {
-                        $results['skippedUsers'][] = $networkUser;
+                        $results['skippedUsers'][$networkUser['PrimaryEmail']['Data'] ?: $networkUser['Username']] = $networkUser;
                         $results['skipped']++;
                     }
                 } catch (SyncException $s) {
