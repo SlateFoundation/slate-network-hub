@@ -14,7 +14,8 @@ class School extends ActiveRecord
 
     public static $fields = [
         'Domain',
-        'APIKey'
+        'APIKey',
+        'Handle'
     ];
 
     public function getNetworkUsers()
@@ -50,8 +51,7 @@ class School extends ActiveRecord
                 'exceptionMessage' => $results,
                 'exceptionCode' => $httpStatus
             ]);
-
-            return false;
+            throw new \Exception("Error reading ($curlUrl) response: [$httpStatus] $response");
         }
     }
 }
