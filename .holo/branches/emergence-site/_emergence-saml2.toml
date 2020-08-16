@@ -1,6 +1,5 @@
 [holomapping]
 files = [
     "*/**",
-    "!.vscode/"
+    "!php-config/Git.config.d/"
 ]
-after = "*"
