@@ -1,7 +1,7 @@
 {extends "designs/site.tpl"}
 
 {block "content"}
-    <h2>Log in to {Slate::$schoolName}</h2>
+    <h2>Log in to {$.Site.title|escape}</h2>
     {if $authException}
         <div class="notify error">
             <strong>Sorry!</strong> {$authException->getMessage()}
