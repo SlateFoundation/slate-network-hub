@@ -31,7 +31,7 @@ class Connector extends AbstractConnector implements ISynchronize
                 return static::handleNetworkLoginRequest();
 
             default:
-                return static::handleRequest($action);
+                return parent::handleRequest($action);
         }
     }
 
