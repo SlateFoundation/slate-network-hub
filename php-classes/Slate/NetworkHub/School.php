@@ -13,6 +13,9 @@ class School extends ActiveRecord
     ];
 
     public static $fields = [
+        'Protocol' => [
+            'default' => 'http://'
+        ],
         'Domain',
         'APIKey',
         'Handle'
@@ -35,7 +38,7 @@ class School extends ActiveRecord
             'format' => 'json'
         ]);
 
-        $curlUrl = $this->Domain . static::$networkApiEndpoints['users'] . '?' . $queryParameters;
+        $curlUrl = $this->Protocol . $this->Domain . static::$networkApiEndpoints['users'] . '?' . $queryParameters;
         $ch = curl_init($curlUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 
