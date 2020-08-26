@@ -5,8 +5,7 @@ use Firebase\JWT\JWT;
 use Slate\NetworkHub\School;
 use Slate\NetworkHub\User;
 
-if (!empty($_REQUEST['hub_token'])) {
-    $hubToken = $_REQUEST['hub_token'];
+if (!empty(($hubToken = $_REQUEST['hub_token']))) {
     list($header, $payload, $signature) = explode('.', $hubToken);
     $decodedPayload = json_decode(base64_decode($payload), true);
 
@@ -20,7 +19,7 @@ if (!empty($_REQUEST['hub_token'])) {
                 return RequestHandler::throwInvalidRequestError('hub_token is invalid. Please retry the request or contact an administrator if the issue persists.');
             }
 
-            $NetworkUser = User::getByUsername($decodedPayload['user']['PrimaryEmail']);
+            $NetworkUser = User::getByField('Email', $decodedPayload['user']['PrimaryEmail']);
 
             if (!$NetworkUser || $NetworkUser->SchoolID !== $NetworkSchool->ID) {
                 return RequestHandler::throwInvalidRequestError('hub_token is invalid. Please retry the request or contact an administrator if the issue persists.');
