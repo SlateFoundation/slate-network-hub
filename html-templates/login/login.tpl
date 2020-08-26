@@ -18,7 +18,7 @@
     {if $localLoginFlow}
         {$formAttribs = ''}
     {else}
-        {$formAttribs = cat('action="/connectors/network-hub/login"', $returnUrl)}
+        {$formAttribs = 'action="/connectors/network-hub/login"'}
     {/if}
 
     <form method="POST" class="login-form" {$formAttribs}>
