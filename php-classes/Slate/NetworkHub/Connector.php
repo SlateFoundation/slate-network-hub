@@ -10,7 +10,6 @@ use Emergence\Connectors\ISynchronize;
 use Emergence\Connectors\Exceptions\SyncException;
 use Emergence\Connectors\SyncResult;
 use Emergence\KeyedDiff;
-use Emergence\People\ContactPoint\Email;
 use Emergence\Util\Data as DataUtil;
 
 use Firebase\JWT\JWT;
@@ -39,41 +38,35 @@ class Connector extends AbstractConnector implements ISynchronize
     {
 
         // redirect to original route
-        if ($jwtPayload = $_SESSION['hub_token_payload'] && $_SESSION['network_login_return']) {
-            Site::redirect($_SESSION['network_login_return']);
-        }
+        // if ($jwtPayload = $_SESSION['hub_token_payload'] && $_SESSION['network_login_return']) {
+        //     Site::redirect($_SESSION['network_login_return']);
+        // }
 
         // redirect to school login
         if (!empty($_REQUEST['email'])) {
             // try to redirect user network school's login
-            $EmailContactPoint = Email::getByWhere([
-                'Data' => $_REQUEST['email']
-            ]);
 
-            $NetworkUser = NetworkUser::getByID($EmailContactPoint->PersonID);
+            $NetworkUser = NetworkUser::getByField('Email', $_REQUEST['email']);
 
             if (
-                !$EmailContactPoint ||
                 !$NetworkUser ||
                 !$NetworkUser->School
             ) {
                 return static::throwInvalidRequestError('Unable to find the user within the network. Please contact an admininstrator for support.');
             }
 
-            $hostname = 'vm.nafis.me:88'; // Site::getConfig('primary_hostname');
             $queryParameters = http_build_query([
-                'username' => $EmailContactPoint->toString(),
-                // TODO: replace with generated URL
-                'redirectUrl' => 'http://' . $hostname . $_REQUEST['_LOGIN']['return']
+                'username' => $NetworkUser->Email,
+                'redirectUrl' => \Emergence\Util\Url::buildAbsolute($_REQUEST['_LOGIN']['return'])
             ]);
 
-            $networkSiteLoginUrl = 'http://' . $NetworkUser->School->Domain.'/network-api/login?'.$queryParameters;
+            $networkSiteLoginUrl = $NetworkUser->School->Protocol . $NetworkUser->School->Domain . '/network-api/login?' . $queryParameters;
 
-            header('Location: '.$networkSiteLoginUrl);
+            header('Location: ' . $networkSiteLoginUrl);
         }
 
         // show network login screen
-        return static::respond('connectors/network-hub/network-login', [
+        return static::respond('login/login', [
             '_LOGIN' => [
                 'return' => $returnUrl
             ]
@@ -152,7 +145,7 @@ class Connector extends AbstractConnector implements ISynchronize
                     } elseif ($syncResults->getStatus() === SyncResult::STATUS_VERIFIED) {
                         $results['verified']++;
                     } elseif ($syncResults->getStatus() === SyncResult::STATUS_SKIPPED) {
-                        $results['skippedUsers'][$networkUser['PrimaryEmail']['Data'] ?: $networkUser['Username']] = $networkUser;
+                        $results['skippedUsers'][] = $networkUser;
                         $results['skipped']++;
                     }
                 } catch (SyncException $s) {
@@ -179,11 +172,20 @@ class Connector extends AbstractConnector implements ISynchronize
                     'slateDomain' => $NetworkSchool->Domain
                 ]
             );
+        } elseif (empty($networkUserRecord['Username'])) {
+            return new SyncResult(
+                SyncResult::STATUS_SKIPPED,
+                'Skipped {slateUsername} @ {slateDomain} due to missing Slate username',
+                [
+                    'slateUsername' => $networkUserRecord['PrimaryEmail']['Data'],
+                    'slateDomain' => $NetworkSchool->Domain
+                ]
+            );
         }
 
         $networkUserConditions = [
             'SchoolID' => $NetworkSchool->ID,
-            'SchoolUsername' => $networkUserRecord['Username']
+            'Email' => $networkUserRecord['PrimaryEmail']['Data']
         ];
 
         // create a new network user if it does not exist
@@ -192,21 +194,21 @@ class Connector extends AbstractConnector implements ISynchronize
                 'FirstName' => $networkUserRecord['FirstName'],
                 'LastName' => $networkUserRecord['LastName'],
                 'UserClass' => $networkUserRecord['Class'],
-                'AccountLevel' => $networkUserRecord['AccountLevel'],
+                // DISABLED because we no longer extend SLATE
+                // 'AccountLevel' => $networkUserRecord['AccountLevel'],
+                'Email' => $networkUserRecord['PrimaryEmail']['Data'],
                 'StudentNumber' => $networkUserRecord['StudentNumber'],
                 'SchoolUsername' => $networkUserRecord['Username'],
                 'SchoolID' => $NetworkSchool->ID
             ]);
 
-            $NetworkUser->PrimaryEmail = $NetworkUserPrimaryEmail = Email::fromString(
-                $networkUserRecord['PrimaryEmail']['Data'],
-                $NetworkUser
-            );
+            // Removed because we no longer extend Slate
 
             if (!$NetworkUser->validate(true)) {
                 $logger->error(
-                    'Unable to create network user -- invalid record {validationErrors}',
+                    'Unable to create network user {slatePrimaryEmail} -- invalid record {validationErrors}',
                     [
+                        'slatePrimaryEmail' => $NetworkUser->Email,
                         'networkUserRecord' => $networkUserRecord,
                         'validationErrors' => $NetworkUser->getValidationErrors()
                     ]
@@ -230,7 +232,7 @@ class Connector extends AbstractConnector implements ISynchronize
             $logger->notice(
                 'Created network user for {slatePrimaryEmail}',
                 [
-                    'slatePrimaryEmail' => $NetworkUserPrimaryEmail->Data
+                    'slatePrimaryEmail' => $NetworkUser->Email
                 ]
             );
 
@@ -241,7 +243,7 @@ class Connector extends AbstractConnector implements ISynchronize
                     'FirstName' => $NetworkUser->FirstName,
                     'LastName' => $NetworkUser->LastName,
                     'Username' => $NetworkUser->Username,
-                    'slatePrimaryEmail' => $NetworkUserPrimaryEmail->Data,
+                    'slatePrimaryEmail' => $NetworkUser->Email,
                     'slateDomain' => $NetworkSchool->Domain
                 ]
             );
@@ -258,13 +260,12 @@ class Connector extends AbstractConnector implements ISynchronize
                 $userChanges->addChange('LastName', $networkUserRecord['LastName'], $NetworkUser->LastName);
             }
 
-            if ($NetworkUser->PrimaryEmail->toString() != $networkUserRecord['PrimaryEmail']['Data']) {
-                $emailChanges->addChange('Data', $networkUserRecord['PrimaryEmail']['Data'], $NetworkUser->PrimaryEmail->toString());
+            if ($NetworkUser->Email != $networkUserRecord['PrimaryEmail']['Data']) {
+                $userChanges->addChange('Email', $networkUserRecord['PrimaryEmail']['Data'], $NetworkUser->Email);
             }
 
             if (
-                $userChanges->hasChanges() ||
-                $emailChanges->hasChanges()
+                $userChanges->hasChanges()
             ) {
 
                 if ($userChanges->hasChanges()) {
@@ -279,19 +280,6 @@ class Connector extends AbstractConnector implements ISynchronize
                     );
                 }
 
-                if ($emailChanges->hasChanges()) {
-                    $NetworkUser->PrimaryEmail->setFields($emailChanges->getNewValues());
-
-                    $logger->debug(
-                        'Updating Network User {schoolUsername} @ {schoolDomain} primary email: {slatePrimaryEmail}',
-                        [
-                            'schoolUsername' => $NetworkUser->SchoolUsername,
-                            'schoolDomain' => $NetworkUser->School->Domain,
-                            'slatePrimaryEmail' => $NetworkUser->PrimaryEmail->toString(),
-                            'changes' => $emailChanges
-                        ]
-                    );
-                }
 
                 if (!$pretend) {
                     $NetworkUser->save(true);
@@ -301,7 +289,7 @@ class Connector extends AbstractConnector implements ISynchronize
                     SyncResult::STATUS_UPDATED,
                     'Updated network user {slatePrimaryEmail} @ {slateDomain}',
                     [
-                        'slatePrimaryEmail' => $NetworkUser->PrimaryEmail->toString(),
+                        'slatePrimaryEmail' => $NetworkUser->Email,
                         'slateDomain' => $NetworkSchool->Domain
                     ]
                 );
@@ -312,7 +300,7 @@ class Connector extends AbstractConnector implements ISynchronize
             SyncResult::STATUS_VERIFIED,
             'Network user {slatePrimaryEmail} @ {slateDomain} found and verified',
             [
-                'slatePrimaryEmail' => $NetworkUser->PrimaryEmail->toString(),
+                'slatePrimaryEmail' => $NetworkUser->Email,
                 'slateDomain' => $NetworkSchool->Domain
             ]
         );
