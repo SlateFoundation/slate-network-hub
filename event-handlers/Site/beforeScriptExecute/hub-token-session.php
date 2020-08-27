@@ -5,7 +5,8 @@ use Firebase\JWT\JWT;
 use Slate\NetworkHub\School;
 use Slate\NetworkHub\User;
 
-if (!empty(($hubToken = $_REQUEST['hub_token']))) {
+if (!empty($_REQUEST['hub_token'])) {
+    $hubToken = $_REQUEST['hub_token'];
     list($header, $payload, $signature) = explode('.', $hubToken);
     $decodedPayload = json_decode(base64_decode($payload), true);
 
