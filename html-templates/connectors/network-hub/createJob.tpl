@@ -41,6 +41,19 @@
         </fieldset>
 
         <fieldset>
+            <legend>Network Schools</legend>
+            {foreach from=\Slate\NetworkHub\School::getAll() item=School}
+                <p>
+                    <label>
+                        {$School->Handle} ({$School->Domain})
+                        <input type="checkbox" name="schools[{$School->Handle}]" value="true" {refill field=schools[$School->Handle] checked="true" default="false"}>
+                    </label>
+                </p>
+            {/foreach}
+        </fieldset>
+
+
+        <fieldset>
             <legend>User Accounts</legend>
             <p>
                 <label>

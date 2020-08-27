@@ -73,6 +73,19 @@ class Connector extends AbstractConnector implements ISynchronize
         ]);
     }
 
+
+    // workflow implementations
+    protected static function _getJobConfig(array $requestData)
+    {
+        $config = parent::_getJobConfig($requestData);
+
+        $config['pullUsers'] = !empty($requestData['pullUsers']);
+        $config['schools'] = !empty($requestData['schools']) ? $requestData['schools'] : [];
+
+        return $config;
+    }
+
+
     public static function synchronize(IJob $Job, $pretend = true)
     {
         $results = [
@@ -81,12 +94,17 @@ class Connector extends AbstractConnector implements ISynchronize
             ]
         ];
 
-        $NetworkHubSchools = School::getAll();
+        foreach (School::getAll() as $networkSchool) {
+            if (array_key_exists($networkSchool->Handle, $Job->Config['schools'])) {
+                $NetworkHubSchools[] = $networkSchool;
+            }
+        }
+
         if (empty($NetworkHubSchools)) {
             $Job->error(
-                'No network schools found. Please ensure they have been added.',
+                'No network schools selected. Please ensure at least one school is selected.',
                 [
-                    'query_results' => $NetworkHubSchools
+                    'query_results' => $Job->Config['schools']
                 ]
             );
             return false;
