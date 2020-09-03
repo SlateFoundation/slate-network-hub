@@ -4,13 +4,11 @@ namespace Slate\NetworkHub;
 
 use ActiveRecord;
 use Emergence\Logger;
+use Emergence\People\Person;
 
 class School extends ActiveRecord
 {
     public static $tableName = 'slate_network_schools';
-    public static $networkApiEndpoints = [
-        'users' => '/network-api/users'
-    ];
 
     public static $fields = [
         'Protocol' => [
@@ -21,7 +19,17 @@ class School extends ActiveRecord
         'Handle'
     ];
 
-    public function getNetworkUsers()
+    public static $relationships = [
+        'Users' => [
+            'type' => 'many-many',
+            'class' => Person::class,
+            'linkClass' => UserSchool::class,
+            'linkLocal' => 'SchoolID',
+            'linkForeign' => 'PersonID'
+        ]
+    ];
+
+    public function fetchNetworkUsers($params = [])
     {
         if (!$this->Domain) {
             throw new \Exception('Domain must be configured to retrieve network users.');
@@ -31,14 +39,14 @@ class School extends ActiveRecord
             throw new \Exception('APIKey must be configured to retrieve network users.');
         }
 
-        $queryParameters = http_build_query([
+        $queryParameters = http_build_query(array_merge([
             'apiKey' => $this->APIKey,
             'limit' => 0,
-            'include' => 'Mapping,PrimaryEmail',
+            'include' => 'PrimaryEmail',
             'format' => 'json'
-        ]);
+        ], $params));
 
-        $curlUrl = $this->Protocol . $this->Domain . static::$networkApiEndpoints['users'] . '?' . $queryParameters;
+        $curlUrl = $this->Protocol . $this->Domain . Connector::$apiEndpoints['users'] . '?' . $queryParameters;
         $ch = curl_init($curlUrl);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 

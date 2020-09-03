@@ -39,7 +39,23 @@
                 {loginField}
                 {passwordField}
             {else}
-                {field inputName=email label="Email Address" required=true attribs='autofocus autocapitalize="none" autocorrect="off" spellcheck="false"' hint='Log in with your SLATE email address.'}
+                {field
+                    inputName=email
+                    label="Email Address"
+                    required=true
+                    attribs='autofocus autocapitalize="none" autocorrect="off" spellcheck="false"'
+                    hint='Log in with your SLATE email address.'
+                    default=$.request.email
+                }
+
+                {if !empty($Schools)}
+                    <select name="SchoolHandle">
+                        <option value="">Select One</option>
+                        {foreach from=$Schools item=School}
+                            <option value="{$School->Handle}">{$School->Domain}</option>
+                        {/foreach}
+                    </select>
+                {/if}
             {/if}
 
             <div class="submit-area">
