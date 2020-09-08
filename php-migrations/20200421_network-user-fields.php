@@ -8,9 +8,7 @@ use SQL;
 $tableName = User::$tableName;
 $historyTableName = User::getHistoryTableName();
 $columnNames = [
-    'SchoolID',
-    'SchoolUsername',
-    'UserClass'
+    'SchoolNumber',
 ];
 
 if (!static::tableExists($tableName)) {
