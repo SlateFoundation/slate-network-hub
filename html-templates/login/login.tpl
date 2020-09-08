@@ -1,7 +1,7 @@
 {extends "designs/site.tpl"}
 
 {block "content"}
-    <h2>Log in to {Slate::$schoolName}</h2>
+    <h2>Log in to {$.Site.title|escape}</h2>
     {if $authException}
         <div class="notify error">
             <strong>Sorry!</strong> {$authException->getMessage()}
@@ -18,7 +18,7 @@
     {if $localLoginFlow}
         {$formAttribs = ''}
     {else}
-        {$formAttribs = cat('action="/connectors/network-hub/login"', $returnUrl)}
+        {$formAttribs = 'action="/connectors/network-hub/login"'}
     {/if}
 
     <form method="POST" class="login-form" {$formAttribs}>
@@ -39,7 +39,23 @@
                 {loginField}
                 {passwordField}
             {else}
-                {field inputName=email label="Email Address" required=true attribs='autofocus autocapitalize="none" autocorrect="off" spellcheck="false"' hint='Log in with your SLATE email address.'}
+                {field
+                    inputName=email
+                    label="Email Address"
+                    required=true
+                    attribs='autofocus autocapitalize="none" autocorrect="off" spellcheck="false"'
+                    hint='Log in with your SLATE email address.'
+                    default=$.request.email
+                }
+
+                {if !empty($Schools)}
+                    <select name="SchoolHandle">
+                        <option value="">Select One</option>
+                        {foreach from=$Schools item=School}
+                            <option value="{$School->Handle}">{$School->Domain}</option>
+                        {/foreach}
+                    </select>
+                {/if}
             {/if}
 
             <div class="submit-area">
