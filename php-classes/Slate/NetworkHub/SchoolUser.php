@@ -35,10 +35,10 @@ class SchoolUser extends ActiveRecord
     ];
 
     public static $validators = [
-        'SchoolID' => [
+        'School' => [
             'validator' => 'require-relationship'
         ],
-        'PersonID' => [
+        'Person' => [
             'validator' => 'require-relationship'
         ]
     ];
@@ -92,5 +92,15 @@ class SchoolUser extends ActiveRecord
 
         // save results
         return $this->finishValidation();
+    }
+
+    public function getMapping()
+    {
+         return SchoolUserMapping::getByWhere([
+            'Connector' => Connector::getConnectorId(),
+            'ContextClass' => $this->getRootClass(),
+            'ContextID' => $this->ID,
+            'ExternalKey' => 'user[ID]'
+        ]);
     }
 }
